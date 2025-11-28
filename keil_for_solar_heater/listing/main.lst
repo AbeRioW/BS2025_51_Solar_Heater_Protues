@@ -1,0 +1,264 @@
+C51 COMPILER V9.01   MAIN                                                                  11/24/2025 17:11:14 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\output\main.obj
+COMPILER INVOKED BY: C:\Program Files\KEIL4\C51\BIN\C51.EXE main.c BROWSE INCDIR(.\OLED) DEBUG OBJECTEXTEND PRINT(.\list
+                    -ing\main.lst) OBJECT(.\output\main.obj)
+
+line level    source
+
+   1          #include "oled.h"
+   2          #include "adc0832.h"
+   3          #include "stdio.h"
+   4          
+   5          u32 level_high = 100;
+   6          u32 level_low = 20;
+   7          u32 temp_high = 80; 
+   8          
+   9          typedef unsigned int WORD;
+  10          sbit P17 = P1^7;
+  11          
+  12          WORD count;                         //1000 times counter
+  13          /* define constants */
+  14          #define FOSC 11059200L
+  15          #define T1MS (65536-FOSC/12/1000)   //1ms timer calculation method in 12T mode
+  16          
+  17          //motor
+  18          sbit P20 = P2^0;
+  19          sbit P21 = P2^1;
+  20          sbit P22 = P2^2;
+  21          
+  22          int show_main_ui = 0;   //showui的标志位
+  23          int is_setting = 0;
+  24          
+  25          //button
+  26          sbit B_UP = P1^5;
+  27          sbit B_DOWN = P1^6;
+  28          sbit B_ENSURE = P1^7;
+  29          
+  30          
+  31          //External interrupt0 service routine
+  32          void exint0() interrupt 0           //(location at 0003H)
+  33          {
+  34   1          is_setting++;
+  35   1              if(is_setting>1)
+  36   1              {
+  37   2                 is_setting=0;
+  38   2              } 
+  39   1      }
+  40          
+  41          
+  42          void tm0_isr() interrupt 1
+  43          {
+  44   1          TL0 = T1MS;                     //reload timer0 low byte
+  45   1          TH0 = T1MS >> 8;                //reload timer0 high byte
+  46   1          if (count-- == 0)               //1ms * 1000 -> 1s
+  47   1          {
+  48   2              count = 1000;               //reset counter
+  49   2                      show_main_ui=1;
+  50   2          }
+  51   1      }
+  52          
+  53          //定时器1ms一次
+  54          void timer0_init(void)
+C51 COMPILER V9.01   MAIN                                                                  11/24/2025 17:11:14 PAGE 2   
+
+  55          {
+  56   1          TMOD |= 0x01;                    //set timer0 as mode1 (16-bit)
+  57   1          TL0 = T1MS;                     //initial timer0 low byte
+  58   1          TH0 = T1MS >> 8;                //initial timer0 high byte
+  59   1          TR0 = 1;                        //timer0 start running
+  60   1          ET0 = 1;                        //enable timer0 interrupt
+  61   1          EA = 1;                         //open global interrupt switch
+  62   1          count = 0;                      //initial counter
+  63   1      }
+  64          
+  65          
+  66          void motor_control(int cmd)
+  67          {
+  68   1            if(cmd==0)         //上水
+  69   1                {
+  70   2                   P20 = 1;
+  71   2                       P21 = 0;
+  72   2                       P22 = 1;
+  73   2                }
+  74   1      
+  75   1                if(cmd==1)     //下水
+  76   1                {
+  77   2                   P20 = 0;
+  78   2                       P21 = 1;
+  79   2                       P22 = 1;
+  80   2                }
+  81   1      
+  82   1                if(cmd==2)     //停止
+  83   1                {
+  84   2                   P20 = 0;
+  85   2                       P21 = 0;
+  86   2                       P22 = 0;
+  87   2                }
+  88   1      }
+  89          
+  90          void setting_ui(void)
+  91          {
+  92   1        int current_position=0;
+  93   1        OLED_Clear();
+  94   1        while(1)
+  95   1        {
+  96   2              OLED_ShowString(0,0,"  Setting",8);
+  97   2      
+  98   2              OLED_ShowString(0,1,"level low:",8);
+  99   2              OLED_ShowNum2(80,1,level_low,3,8,1); 
+ 100   2              OLED_ShowString(120,1,current_position==0?"<":" ",8);
+ 101   2         
+ 102   2          OLED_ShowString(0,2,"level high:",8);
+ 103   2          OLED_ShowNum2(88,2,level_high,3,8,1); 
+ 104   2           OLED_ShowString(120,2,current_position==1?"<":" ",8);
+ 105   2      
+ 106   2          OLED_ShowString(0,3,"temperature:",8);
+ 107   2          OLED_ShowNum2(96,3,temp_high,3,8,1);
+ 108   2              OLED_ShowString(120,3,current_position==2?"<":" ",8);
+ 109   2      
+ 110   2          if(B_UP==0)
+ 111   2               {
+ 112   3                     switch(current_position)
+ 113   3                         {
+ 114   4                            case 0:
+ 115   4                                         level_low++;
+ 116   4                                         if(level_low>30)
+C51 COMPILER V9.01   MAIN                                                                  11/24/2025 17:11:14 PAGE 3   
+
+ 117   4                                                      level_low=0;
+ 118   4                                break;                                
+ 119   4                                case 1:
+ 120   4                                              level_high++;
+ 121   4                                              if(level_high>100)
+ 122   4                                                      level_high=60;
+ 123   4                                break;
+ 124   4                                case 2:
+ 125   4                                              temp_high++;
+ 126   4                                              if(temp_high>100)
+ 127   4                                                 temp_high = 80;
+ 128   4                                break;
+ 129   4                         }
+ 130   3                 } 
+ 131   2      
+ 132   2                 if(B_DOWN==0)
+ 133   2                 {
+ 134   3                     switch(current_position)
+ 135   3                         {
+ 136   4                            case 0:
+ 137   4                                         level_low--;
+ 138   4                                         if(level_low<0)
+ 139   4                                                      level_low=30;
+ 140   4                                break;                                
+ 141   4                                case 1:
+ 142   4                                              level_high--;
+ 143   4                                              if(level_high<60)
+ 144   4                                                      level_high=100;
+ 145   4                                break;
+ 146   4                                case 2:
+ 147   4                                              temp_high--;
+ 148   4                                              if(temp_high<80)
+ 149   4                                                 temp_high = 100;
+ 150   4                                break;
+ 151   4                         }
+ 152   3                 } 
+ 153   2      
+ 154   2                 if(B_ENSURE==0)
+ 155   2                 {
+ 156   3                     current_position++;
+ 157   3                         if(current_position>2)
+ 158   3                         current_position=0;
+ 159   3                 } 
+ 160   2      
+ 161   2                 if(!is_setting)
+ 162   2                 {
+ 163   3                       OLED_Clear();
+ 164   3                     break;
+ 165   3                 }
+ 166   2              }
+ 167   1      }
+ 168          
+ 169          void main_ui(void)
+ 170          {
+ 171   1          u8 adc0_data,adc1_data; 
+ 172   1              OLED_ShowString(0,0,"  water heater",8); 
+ 173   1              if(!is_setting)
+ 174   1              {
+ 175   2                 show_main_ui = 0;
+ 176   2                 adc0_data= adc0832_readbyte(0);        //水位
+ 177   2                 adc1_data= adc0832_readbyte(1);
+ 178   2      
+C51 COMPILER V9.01   MAIN                                                                  11/24/2025 17:11:14 PAGE 4   
+
+ 179   2                 OLED_ShowString(0,1,"water level:",8);
+ 180   2                 OLED_ShowNum2(96,1,(u32)adc0_data,4,8,1);
+ 181   2      
+ 182   2                 OLED_ShowString(0,2,"temperature:",8);
+ 183   2                 OLED_ShowNum2(96,2,(u32)adc1_data,4,8,1);
+ 184   2                 if(adc0_data<level_low||adc1_data>temp_high)  //水位低于20或者温度大于90就上水
+ 185   2                 {
+ 186   3                      motor_control(0);
+ 187   3                 }
+ 188   2                 else if(adc0_data>level_high)  //水位太高,下水
+ 189   2                 {
+ 190   3                      motor_control(1);
+ 191   3                 }
+ 192   2                 else
+ 193   2                 {
+ 194   3                     motor_control(2);
+ 195   3                 }
+ 196   2      
+ 197   2              }
+ 198   1      
+ 199   1      }
+ 200          
+ 201          void main()
+ 202          {          
+ 203   1      
+ 204   1        
+ 205   1              char* data_light;
+ 206   1              OLED_Init();  //初始话OLED
+ 207   1              OLED_Clear();
+ 208   1      
+ 209   1                      IT0 = 1;       //set INT0 int type (1:Falling 0:Low level)
+ 210   1          EX0 = 1;      //enable INT0 interrupt
+ 211   1      
+ 212   1              CLK = 0;  //ADC初始化
+ 213   1              CS = 1;
+ 214   1      
+ 215   1              timer0_init(); //定时器初始化
+ 216   1      
+ 217   1      
+ 218   1              while(1)
+ 219   1              {
+ 220   2                  if(!is_setting)
+ 221   2                      {
+ 222   3                        main_ui();
+ 223   3                      }
+ 224   2                      else
+ 225   2                      {
+ 226   3                         setting_ui();
+ 227   3                      }
+ 228   2      
+ 229   2      
+ 230   2              }
+ 231   1      }
+*** WARNING C280 IN LINE 205 OF MAIN.C: 'data_light': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    777    ----
+   CONSTANT SIZE    =     78    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     12       7
+C51 COMPILER V9.01   MAIN                                                                  11/24/2025 17:11:14 PAGE 5   
+
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

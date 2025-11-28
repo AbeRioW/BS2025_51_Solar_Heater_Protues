@@ -1,0 +1,1 @@
+"main.c" BROWSE INCDIR(.\OLED) DEBUG OBJECTEXTEND PRINT(.\listing\main.lst) OBJECT(.\output\main.obj)

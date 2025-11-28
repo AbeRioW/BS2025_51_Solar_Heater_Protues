@@ -1,0 +1,6 @@
+".\output\STARTUP.obj",
+".\output\main.obj",
+".\output\oled.obj",
+".\output\adc0832.obj" 
+TO ".\output\solar_heater" 
+PRINT(".\listing\solar_heater.m51") RAMSIZE(256) 
